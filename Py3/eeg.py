@@ -209,7 +209,18 @@ class ControllerIO():
         self.device = None
         self.packet_count = 0
         self.setInfo("recording","False")
-        
+
+        self.infoData = {'trigger': 'False'}
+        self.s = None
+        self.c = None
+        self.addr = None
+        self.accepted = False
+        self.closed = True
+        self.record_data = []
+
+    def is_trigger(self):
+        return eval(self.infoData['trigger'])
+
     #  Data Input.
     # ¯¯¯¯¯¯¯¯¯¯¯¯¯¯
     def onData(self, uid, text):
@@ -448,17 +459,72 @@ class ControllerIO():
         aModel = self.newModel
         self.newModel = 0
         return self.aModel
-         
+
+    def receiveTrigger(self):
+        trigger_content = b''
+
+        mirror.text('Waiting trigger client connection...')
+
+        if (not self.accepted) and (not self.closed):
+            c, addr = self.s.accept()
+            self.c = c
+            self.c.setblocking(False)
+            self.addr = addr
+            mirror.text(f'Connected by {addr}')
+            self.accepted = True
+
+        if self.accepted:
+            try:
+                trigger_content = self.c.recv(1)
+            except:
+                trigger_content = b''
+
+        return trigger_content
+
     def startRecord(self, recordPacket):
         if eval(self.getInfo("recording")) == False:
             return
+        trigger_content = '0'
+
         try:
-            self.packet_count += 1
-            self.cyFile.write(recordPacket + "\r\n")
-            self.cyFile.flush()
-            os.fsync(self.cyFile.fileno())
-        except:
-            pass
+            if self.is_trigger():
+                trigger_content = self.receiveTrigger()
+                if trigger_content != b'':
+                    trigger_content = trigger_content.decode(encoding='UTF-8')
+                    mirror.text('收到TRIGGER:{}, {} '.format(trigger_content, time.time()))
+                else:
+                    trigger_content = '0'
+
+        except KeyboardInterrupt:
+            exit(-1)
+        except Exception as e:
+            print(e)
+            trigger_content = '0'
+
+        self.packet_count += 1
+        self.record_data.append(recordPacket + self.delimiter + trigger_content + "\r\n")
+        # self.cyFile.write(recordPacket + self.delimiter + trigger_content + "\r\n")
+        # mirror.text('Writing: {}'.format(recordPacket + self.delimiter + trigger_content + "\r\n"))
+        # self.cyFile.flush()
+        # os.fsync(self.cyFile.fileno())
+
+        if trigger_content == '9':
+            self.s.close()
+            self.accepted = False
+            self.closed = True
+            self.c = None
+            self.addr = None
+
+    # def startRecord(self, recordPacket):
+    #     if eval(self.getInfo("recording")) == False:
+    #         return
+    #     try:
+    #         self.packet_count += 1
+    #         self.cyFile.write(recordPacket + "\r\n")
+    #         self.cyFile.flush()
+    #         os.fsync(self.cyFile.fileno())
+    #     except:
+    #         pass
 
     def stopRecord(self):
         if eval(self.getInfo("recording")) == False or self.cyFile == None:

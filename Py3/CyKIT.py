@@ -76,6 +76,7 @@ if arg_count == 1 or arg_count > 5 or sys.argv[1] == "help" or sys.argv[1] == "-
     mirror("  'pywinusb'            Specifies to use the pywinusb libraries to connect to the USB device.\r\n\r\n")
     mirror("                         Defaults to using libusb libraries.\r\n\r\n")
     mirror("  'noweb'               Displays data. (without requiring a TCP connection.)\r\n\r\n")
+    mirror("  'trigger'            Sends triggers combined with psychopy\r\n\r\n")
     mirror("  'bluetooth'  Attempt to AUTO-DETECT an already paired bluetooth device.\r\n\r\n")
     mirror("  'bluetooth=xxxxxxxx'  Connect to an already paired bluetooth device, use the hex digit found in the devices pairing name.\r\n\r\n")
     mirror("                         The pairing name can easily be found in Windows Bluetooth settings.\r\n\r\n")
@@ -129,6 +130,11 @@ def main(CyINIT):
     cy_IO.setInfo("ioObject", cy_IO)
     cy_IO.setInfo("config", parameters)
 
+    if 'trigger' in parameters:
+        cy_IO.setInfo('trigger', 'True')
+    else:
+        cy_IO.setInfo("trigger", "False")
+
     if "verbose" in parameters: 
         cy_IO.setInfo("verbose","True")
     else:                   
@@ -147,6 +153,18 @@ def main(CyINIT):
 
     if "openvibe" in parameters:
         cy_IO.setInfo("openvibe","True")
+
+    if cy_IO.is_trigger():
+        mirror('Creating socket...')
+        cy_IO.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        cy_IO.s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        host = '127.0.0.1'
+        port = 9999
+        cy_IO.s.bind((host, port))
+        cy_IO.s.listen(5)
+        cy_IO.s.settimeout(0.0)
+        cy_IO.closed = False
+        mirror('Finished creating socket...')
 
 
     headset = eeg.EEG(MODEL, cy_IO, parameters)
